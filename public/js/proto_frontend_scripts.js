@@ -30,84 +30,6 @@ function keyToDir(keyCode){
     }
 }
 
-//Function to move snake forward one unit
-//Args: reference to game object
-//Returns: none, changes made to referenced object
-//Requires: game is initialized
-function moveSnakes(game){
-    //stub... latest real version is in server.js right now
-}
-
-// Functions that check whether the current player is colliding with either the gameboard
-// boundaries, any of the other players, or any of the food objects
-
-function check_overlap(x1, y1, x2, y2, rad1, rad2){
-	if ( (x1+rad1 >= x2-rad2 && x1+rad1 <= x2+rad2) || (x1-rad1 <= x2+rad2 && x1+rad1 >= x2-rad2) ) {
-		if ( (y1+rad1 >= y2-rad2 && y1+rad1 <= y2+rad2) || (y1-rad1 <= y2+rad2 && y1-rad1 >= y2-rad2) ){
-			return true;
-		}
-	}
-	return false;
-}
-// checkCollision_Board takes a player p1 and gameboard g and returns true if p1
-// has hit the boundaries of g
-function checkCollision_Board(p1,g) {
-	if (p1.pos_list[0][0]+5 >= g.board.x || p1.pos_list[0][1]+5 >= g.board.y) {return true;}
-	else if (p1.pos_list[0][0]-5 <= 0 || p1.pos_list[0][0]-5 <= 0) {return true;}
-	return false;
-}
-
-// checkCollision_Player takes two players p1 and p2 and returns true if p1 hits the hitbox of p2
-function checkCollision_Player(p1, p2) {
-	for (var i = 0; i < p2.pos_list.length; i++) {
-		if (check_overlap(p1.pos_list[0][0], p1.pos_list[0][1], p2.pos_list[i][0], p2.pos_list[i][1], 5,5) == true){
-			return true;
-		}
-	}
-	return false;
-}
-
-// checkCollision_Food takes a player p1 and a list of food objects foods and returns true if p1
-// hits any one of the the objects in foods
-function checkCollision_Food(p1, foods) {
-	return check_overlap(p1.pos_list[0][0], p1.pos_list[0][1], foods.x, foods.y, 5,5);
-}
-
-
-// ======================================================================================================
-function convertFood(p1, g){
-	for (var i = 0; i < p1.length; i+2) {
-		var food_temp = { x:p1.pos_list[i][0], y:p1.pos_list[i][1] };
-		g.foods.push(food_temp);
-	}
-}
-
-function checkGameEvents(p1, g){
-	if (checkCollision_Board(p1, g)){
-		p1.alive = false;
-		convertFood(p1,g);
-	}
-
-	for (var i = 0; i < g.players.length; i++) {
-		if (checkCollision_Player(p1,g.players[i])){
-			p1.alive = false;
-			g.players[i].score += 100;
-			convertFood(p1,g)
-		}
-	}
-
-	for (var i = 0; i < g.foods.length; i++) {
-		if (checkCollision_Food(p1, g.foods[i])){
-		    p1.score += 10;
-		    g.foods.splice(i, 1);
-		    p1.path_len += 6;
-		    p1.pos_list.push([p1.path[p1.length*6][0], p1.path[p1.length*6][1]]);
-		    p1.length += 1;
-    	}	
-	}
-}
-
-
 //Draw background of canvas using a tile from the style sheet
 //Args: pen, a context from the canvas object
 function drawBG(pen){
@@ -149,11 +71,13 @@ function drawBoostMeter(g,id){
 	//drawing boost meter on same canvas as scoreboard
 	let scoreboard_canvas = $("scoreboard");
 	let pen = scoreboard_canvas.getContext("2d");
-	pen.font = "16px Arial";
+	pen.font = "14px Arial";
 	pen.fillStyle = "red";
-	pen.fillText("Boost", 30, 380);
-	pen.fillRect(40,250,20,g.players[id].boost_level);
-	
+	let h = Math.floor(g.players[id].boost_level);
+	pen.fillText("Boost: (SPACE/SHIFT)", 10, 380);
+	//alert(Math.floor(g.players[id].boost_level) + " was the height");
+	pen.fillStyle = "#ff1c1c";
+	pen.fillRect(70,250+(100-h),20,h);
 }
 
 //Draw the scoreboard
@@ -187,8 +111,9 @@ function drawScores(g){
 	//copying player object into array for array sort
 	let tmp_array = []
 	for(var key in g.players) {
-  		tmp_array.push(g.players[key]);
-  		//console.log(tmp_array); //use console.log and view with developer tools in browser for debugging
+		if(g.players[key].alive){
+  			tmp_array.push(g.players[key]);
+  		}//console.log(tmp_array); //use console.log and view with developer tools in browser for debugging
   		//console.log(players[key]);
   	}
   	//use array sort by player scores (high to low)
@@ -206,7 +131,7 @@ function drawScores(g){
 		let tmp_str = "#" + count.toString(10);
 		pen.fillText( tmp_str, 15, y_offset);
 		//add a way to cut off the name if it's too long
-		pen.fillText( tmp_array[i].name, 45, y_offset);
+		pen.fillText( tmp_array[i].name.slice(0,15), 45, y_offset);
 		pen.fillText( tmp_array[i].score, 150, y_offset);
 		y_offset += 20;
 		count += 1;
@@ -219,26 +144,29 @@ function drawSnake(pen, player){
 	let tile = new Image();
 	tile.src = "pictures/sprite_sheet.png";
 	let offset = player.color*10;
+
 	//draw back to front
-	for(let i=player.pos_list.length-1; i>=1; i--){
-		pen.drawImage(tile, 40, offset, 10, 10, player.pos_list[i][0] - 5, player.pos_list[i][1] - 5, 11, 11);
+	if(player.alive){
+		for(let i=player.pos_list.length-1; i>=1; i--){
+			pen.drawImage(tile, 40, offset, 10, 10, player.pos_list[i][0] - 5, player.pos_list[i][1] - 5, 11, 11);
+		}
+
+		switch (player.direction){
+			case 'up':
+				pen.drawImage(tile, 0, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
+				break;
+			case 'right':
+				pen.drawImage(tile, 10, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
+				break;
+			case 'down':
+				pen.drawImage(tile, 20, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
+				break;
+			case 'left':
+				pen.drawImage(tile, 30, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
+				break;
+		}
 	}
 
-	switch (player.direction){
-		case 'up':
-			pen.drawImage(tile, 0, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
-			break;
-		case 'right':
-			pen.drawImage(tile, 10, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
-			break;
-		case 'down':
-			pen.drawImage(tile, 20, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
-			break;
-		case 'left':
-			pen.drawImage(tile, 30, offset, 10, 10, player.pos_list[0][0] - 5, player.pos_list[0][1] - 5, 11, 11);
-			break;
-	}
-	
 }
 
 //Function to redraw entire canvas at end of update loop
@@ -254,7 +182,7 @@ function redrawCanvas(pen, game, id){
 	drawFood(game.foods, pen);
 	let scoreboard_canvas = $("scoreboard");
 	let scoreboard_pen = scoreboard_canvas.getContext("2d");
-	scoreboard_pen.clearRect(0, 0, 200, 240);//clear scoreboard
+	scoreboard_pen.clearRect(0, 0, 200, 400);//clear scoreboard
 	drawScores(game);
 	drawBoostMeter(game, id);
 }
@@ -348,21 +276,34 @@ function initGame(){
 	//add event listener for player input
 	//pass it an inline anon function
 	window.addEventListener('keydown', function(event) {
-       	var key_code = event.keyCode;
+       	let key_code = event.keyCode;
        	//alert("u pressed" + key_code);
-        //attempting to send this data to server with emit if key was for movement
-        if(keyToDir(key_code) != ''){
+        if (key_code == 16 || key_code == 32){//this is not written to handle client prediction yet
+        	//alert("EMITTING BOOS MSG");
+            socket.emit('playerBoost',{
+	        	input: true //when key: SHIFT or SPACE is down, then toggle boost to true
+        	});
+        }else if(keyToDir(key_code) != ''){
         	//alert("the key you just pressed is a valid movement");
         	//inputQueue.unshift([player_ID, key_code])
-        	socket.emit('playerMovement',{
+            socket.emit('playerMovement',{
 	        	input: key_code
 	        	//NOTE when caught by listener on server key_code is accessed via arg.input
 	        	//in our case the arg is called data, so data.input
         	});
         }
-
-
     }, false);
+
+	//listen for keyup of shift or spacebar to end boost
+	window.addEventListener('keyup', function(event) {
+		let key_code = event.keyCode;
+		if (key_code == 16 || key_code == 32){
+            socket.emit('playerBoost',{
+	        	input: false //when key: SHIFT or SPACE is down, then toggle boost to true
+        	});
+        }
+    }, false);
+
 
 	//listens for gameStateUpdate message from server (just alerts for testing)
 	//(This works here, but doesn't work when called in update function)
@@ -373,7 +314,22 @@ function initGame(){
 	socket.on('authoritativeUpdate', function(data){
 		//somehow update entire local gamestate with (data is the game obj here)
 		game = data;//probly need to do deep copy, doubt this works
-		redrawCanvas(ctx, game, player_ID);
+		redrawCanvas(ctx, game, player_ID);//temporary while debugging
+		/*TEMPORARILY REMOVING TO ISOLATE BUG
+		if(player_ID in game.players){
+			redrawCanvas(ctx, game, player_ID);
+			//if(!game.players[player_ID].alive){
+				//$('game_barrier').style.display = "block";
+				//$('name_box').style.diplay = "none";
+				//$('game_over_box').style.display = "block";
+			//}
+		}else{
+			//player died and was deleted
+			$('game_barrier').style.display = "block";
+			$('name_box').style.diplay = "none";
+			$('game_over_box').style.display = "block";
+		}*/
+		
 	});
 
 }
